@@ -1,0 +1,855 @@
+-- NE ~ Nemesis Enhancements (Rivals) — working ports from old script
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+pcall(function()
+    for _, c in ipairs(getgenv().NE_Conns or {}) do pcall(function() c:Disconnect() end) end
+end)
+getgenv().NE_Conns = {}
+
+-- destroy old guis
+pcall(function()
+    local cg = game:GetService("CoreGui")
+    for _, n in ipairs({"NemesisCrosshair", "NE_Crosshair", "NE_WM", "NE_CH", "NemesisToggleUI", "NE_ToggleUI"}) do
+        local o = cg:FindFirstChild(n)
+        if o then o:Destroy() end
+    end
+end)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local LP = Players.LocalPlayer
+local Cam = workspace.CurrentCamera
+
+-- live config (updated by UI callbacks — this is why toggles work)
+local cfg = {
+    fly = false, flySpeed = 50,
+    walkspeed = false, walkspeedValue = 24,
+    jumppower = false, jumppowerValue = 50,
+    noclip = false,
+    velocity = false, velocitySpeed = 50,
+    infiniteJump = false, doubleJump = false, bhop = false,
+    glide = false, glideSpeed = 280,
+    godmode = false, thirdPerson = false, thirdDist = 10,
+    spinbot = false, spinbotSpeed = 100,
+    aimbot = false, aimbotFov = 120, aimbotSmooth = 0.2,
+    silent = false, silentFov = 150, silentChance = 100, silentPred = true,
+    silentBackshoot = false, silentAntiKatana = false, silentPart = "Head",
+    silentShowFov = false, silentFovRadius = 120,
+    ragebot = false, rageAuto = true, rageFov = 360, rageRange = 800, rageRate = 0.08, ragePred = true,
+    lead = 400, wallbang = false, stickyTarget = false, headOnly = true,
+    projectileMimic = false, antiProjectile = false,
+    bowCombat = false, bowFov = 200, bowRange = 700, bowLead = 400, bowAuto = false,
+    norecoil = false, nospread = false, rapidfire = false, rapidfireValue = -30,
+    fastReload = false, fastEquip = false, instantAim = false,
+    noMuzzle = false, noTracer = false, noFireSound = false,
+    daggerBypass = false, slingBypass = false, bowBypass = false,
+    shootAttempt = false, shootAttemptRate = 0.05,
+    trigger = false, triggerFov = 20, triggerDelay = 0.03,
+    antiAim = false, aaPitch = 0, aaYaw = 0,
+    orbit = false, orbitSpeed = 90, orbitRadius = 8, orbitHeight = 0,
+    hitboxExp = false, hitboxSize = 5,
+    esp = false, espChams = false, espBox = true, espName = true, espDist = true, espHealth = true,
+    fullbright = false, noFog = false,
+    crosshair = true, crossRainbow = true, crossTextOn = true, crossText = "NE",
+    crossSize = 12, crossGap = 6, crossRotate = false, crossRotateSpeed = 120,
+    crossPulse = false, crossPulseSpeed = 2, crossPulseAmount = 4,
+    crossOutline = true, crossThick = 3, crossOutThick = 5,
+    crossR = 0, crossG = 255, crossB = 80,
+    wm = true, wmFps = true, wmText = "NE ~ Nemesis Enhancements",
+    wmEdition = "In Development",
+    wmColorMode = "Rainbow",
+    wmColorR = 90, wmColorG = 180, wmColorB = 255,
+    wmBadge = "NE",
+    antiafk = true, acBypass = false,
+}
+
+local function bind(c)
+    table.insert(getgenv().NE_Conns, c)
+    return c
+end
+
+local repo = "https://raw.githubusercontent.com/cloudsense-pub/UELinoriaLib/main/"
+local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet(repo .. "addons/ThemeManager.lua"))()
+local SaveManager = loadstring(game:HttpGet(repo .. "addons/SaveManager.lua"))()
+
+pcall(function() UIS.ModalEnabled = false end)
+
+local Window = Library:CreateWindow({
+    Title = "NE ~ Nemesis Enhancements",
+    Center = true,
+    AutoShow = true,
+    Resizable = true,
+    ShowCustomCursor = false,
+})
+
+local Tabs = {
+    Combat = Window:AddTab("Combat"),
+    Character = Window:AddTab("Character"),
+    Visuals = Window:AddTab("Visuals"),
+    Movement = Window:AddTab("Movement"),
+    Misc = Window:AddTab("Misc"),
+    Bypasses = Window:AddTab("Bypasses"),
+    Settings = Window:AddTab("Settings"),
+}
+
+local function T(box, id, text, default, key)
+    box:AddToggle(id, {
+        Text = text,
+        Default = default,
+        Callback = function(v) cfg[key] = v and true or false end,
+    })
+end
+local function S(box, id, text, default, min, max, round, key)
+    box:AddSlider(id, {
+        Text = text,
+        Default = default,
+        Min = min,
+        Max = max,
+        Rounding = round or 0,
+        Callback = function(v) cfg[key] = v end,
+    })
+end
+
+-- ===== COMBAT =====
+local Aim = Tabs.Combat:AddLeftGroupbox("Aimbot")
+T(Aim, "aimbot_toggle", "Aimbot", false, "aimbot")
+S(Aim, "aimbot_radius", "FOV", 120, 10, 500, 0, "aimbotFov")
+S(Aim, "aimbot_smoothing", "Smoothing", 0.2, 0.01, 1, 2, "aimbotSmooth")
+
+local Sil = Tabs.Combat:AddRightGroupbox("Silent Aim")
+T(Sil, "silent_toggle", "Enable", false, "silent")
+T(Sil, "silent_backshoot", "Backshoot", false, "silentBackshoot")
+T(Sil, "silent_antikatana", "Anti Katana", false, "silentAntiKatana")
+S(Sil, "silent_hitchance", "Hit Chance", 100, 1, 100, 0, "silentChance")
+Sil:AddDropdown("silent_part", {
+    Text = "Hit Part", Default = 1, Values = {"Head", "HumanoidRootPart"},
+    Callback = function(v) cfg.silentPart = tostring(v) end,
+})
+T(Sil, "silent_prediction", "Prediction", true, "silentPred")
+S(Sil, "silent_radius", "FOV Radius", 150, 10, 600, 0, "silentFov")
+T(Sil, "silent_showfov", "Show FOV", false, "silentShowFov")
+
+local Rage = Tabs.Combat:AddLeftGroupbox("Ragebot")
+T(Rage, "ragebot_enabled", "Ragebot", false, "ragebot")
+T(Rage, "projectile_mimic", "Projectile Mimic", false, "projectileMimic")
+T(Rage, "anti_projectile", "Anti Projectile", false, "antiProjectile")
+T(Rage, "ragebot_autofire", "Auto Fire", true, "rageAuto")
+S(Rage, "ragebot_fov", "FOV", 360, 30, 600, 0, "rageFov")
+S(Rage, "ragebot_range", "Range", 800, 50, 2000, 0, "rageRange")
+S(Rage, "ragebot_firerate", "Fire Rate", 0.08, 0.03, 0.4, 2, "rageRate")
+T(Rage, "ragebot_prediction", "Prediction", true, "ragePred")
+S(Rage, "combat_lead", "Lead Strength", 400, 50, 1000, 0, "lead")
+T(Rage, "wallbang", "Wallbang", false, "wallbang")
+T(Rage, "sticky_target", "Sticky Target", false, "stickyTarget")
+T(Rage, "head_only", "Head Only", true, "headOnly")
+
+local Gun = Tabs.Combat:AddRightGroupbox("Gun")
+T(Gun, "gun_rapidfire", "Rapid Fire", false, "rapidfire")
+S(Gun, "gun_rapidval", "Rapid Fire Value", -30, -30, 0, 0, "rapidfireValue")
+T(Gun, "gun_nospread", "No Spread", false, "nospread")
+T(Gun, "gun_norecoil", "No Recoil", false, "norecoil")
+T(Gun, "gun_fastreload", "Fast Reload", false, "fastReload")
+T(Gun, "gun_fastequip", "Fast Equip", false, "fastEquip")
+T(Gun, "gun_instantaim", "Instant Aim", false, "instantAim")
+T(Gun, "gun_nomuzzle", "No Muzzle Flash", false, "noMuzzle")
+T(Gun, "gun_notracer", "No Bullet Tracer", false, "noTracer")
+T(Gun, "gun_nosound", "No Fire Sound", false, "noFireSound")
+T(Gun, "gun_shootattempt", "Shoot Attempt", false, "shootAttempt")
+
+local Bow = Tabs.Combat:AddLeftGroupbox("Bow Combat")
+T(Bow, "bow_combat", "Enable Bow Combat", false, "bowCombat")
+S(Bow, "bow_fov", "FOV", 200, 20, 360, 0, "bowFov")
+S(Bow, "bow_range", "Range", 700, 50, 1500, 0, "bowRange")
+S(Bow, "bow_lead", "Arrow Lead", 400, 50, 1000, 0, "bowLead")
+T(Bow, "bow_auto", "Auto Fire", false, "bowAuto")
+
+local Trig = Tabs.Combat:AddRightGroupbox("Triggerbot")
+T(Trig, "trigger_toggle", "Triggerbot", false, "trigger")
+S(Trig, "trigger_fov", "FOV", 20, 5, 80, 0, "triggerFov")
+S(Trig, "trigger_delay", "Delay", 0.03, 0, 0.2, 2, "triggerDelay")
+
+local AA = Tabs.Combat:AddLeftGroupbox("Anti Aim")
+T(AA, "aa_enable", "Anti Aim", false, "antiAim")
+S(AA, "aa_pitch", "Pitch", 0, -90, 90, 0, "aaPitch")
+S(AA, "aa_yaw", "Yaw", 0, -180, 180, 0, "aaYaw")
+
+local Orb = Tabs.Combat:AddRightGroupbox("Orbit")
+T(Orb, "orbit_enable", "Orbit Mode", false, "orbit")
+S(Orb, "orbit_speed", "Speed", 90, 10, 720, 0, "orbitSpeed")
+S(Orb, "orbit_radius", "Radius", 8, 1, 50, 0, "orbitRadius")
+S(Orb, "orbit_height", "Height", 0, 0, 100, 0, "orbitHeight")
+
+-- ===== CHARACTER =====
+local Move = Tabs.Movement:AddLeftGroupbox("Movement")
+T(Move, "movement_fly", "Fly", false, "fly")
+S(Move, "movement_flyvalue", "Fly Speed", 50, 1, 2000, 0, "flySpeed")
+T(Move, "movement_noclip", "Noclip", false, "noclip")
+T(Move, "movement_velocity", "Velocity", false, "velocity")
+S(Move, "movement_velocityvalue", "Velocity Speed", 50, 1, 300, 0, "velocitySpeed")
+T(Move, "movement_speed", "WalkSpeed", false, "walkspeed")
+S(Move, "movement_speedvalue", "Speed Value", 24, 16, 200, 0, "walkspeedValue")
+T(Move, "movement_jump", "JumpPower", false, "jumppower")
+S(Move, "movement_jumpvalue", "Power", 50, 50, 300, 0, "jumppowerValue")
+T(Move, "movement_infinite_jump", "Infinite Jump", false, "infiniteJump")
+T(Move, "movement_double_jump", "Double Jump", false, "doubleJump")
+T(Move, "movement_bhop", "Bunny Hop", false, "bhop")
+T(Move, "movement_glide", "Glide", false, "glide")
+S(Move, "movement_glidespeed", "Glide Speed", 280, 10, 500, 0, "glideSpeed")
+
+local Char = Tabs.Character:AddLeftGroupbox("Character")
+T(Char, "char_godmode", "God Mode", false, "godmode")
+T(Char, "char_third", "Third Person", false, "thirdPerson")
+S(Char, "char_thirddist", "TP Distance", 10, 4, 30, 0, "thirdDist")
+T(Char, "char_spinbot", "Spinbot", false, "spinbot")
+S(Char, "char_spinspeed", "Spinbot Speed", 100, 10, 200, 0, "spinbotSpeed")
+T(Char, "char_hitbox", "Hitbox Expander", false, "hitboxExp")
+S(Char, "char_hitboxsize", "Hitbox Size", 5, 1, 20, 1, "hitboxSize")
+
+-- ===== VISUALS =====
+local EspB = Tabs.Visuals:AddLeftGroupbox("ESP")
+T(EspB, "esp_enabled", "Enable ESP", false, "esp")
+T(EspB, "esp_chams", "Chams", false, "espChams")
+T(EspB, "esp_box", "Box", true, "espBox")
+T(EspB, "esp_name", "Name", true, "espName")
+T(EspB, "esp_dist", "Distance", true, "espDist")
+T(EspB, "esp_health", "Health", true, "espHealth")
+
+local World = Tabs.Visuals:AddLeftGroupbox("World")
+T(World, "world_fullbright", "Fullbright", false, "fullbright")
+T(World, "world_nofog", "No Fog", false, "noFog")
+
+local CrossB = Tabs.Visuals:AddRightGroupbox("Crosshair")
+T(CrossB, "crosshair_enabled", "Enable Crosshair", true, "crosshair")
+T(CrossB, "crosshair_outline", "Enable Outline", true, "crossOutline")
+T(CrossB, "crosshair_rainbow", "Rainbow", true, "crossRainbow")
+T(CrossB, "crosshair_text_on", "Enable Text", true, "crossTextOn")
+CrossB:AddInput("crosshair_text", {
+    Text = "Custom Text", Default = "NE", Placeholder = "text under crosshair",
+    Callback = function(v) cfg.crossText = tostring(v or "NE") end,
+})
+S(CrossB, "crosshair_size", "Length", 12, 4, 40, 0, "crossSize")
+S(CrossB, "crosshair_gap", "Gap", 6, 0, 30, 0, "crossGap")
+S(CrossB, "crosshair_thick", "Thickness", 3, 1, 8, 0, "crossThick")
+S(CrossB, "crosshair_outthick", "Outline Thickness", 5, 1, 12, 0, "crossOutThick")
+T(CrossB, "crosshair_rotate", "Rotate", false, "crossRotate")
+S(CrossB, "crosshair_rotspeed", "Rotate Speed", 120, 10, 720, 0, "crossRotateSpeed")
+T(CrossB, "crosshair_pulse", "Pulse", false, "crossPulse")
+S(CrossB, "crosshair_pulsespeed", "Pulse Speed", 2, 0.5, 10, 1, "crossPulseSpeed")
+S(CrossB, "crosshair_pulseamt", "Pulse Amount", 4, 1, 20, 0, "crossPulseAmount")
+S(CrossB, "cross_r", "Color R", 0, 0, 255, 0, "crossR")
+S(CrossB, "cross_g", "Color G", 255, 0, 255, 0, "crossG")
+S(CrossB, "cross_b", "Color B", 80, 0, 255, 0, "crossB")
+
+local WmB = Tabs.Visuals:AddRightGroupbox("Watermark")
+T(WmB, "wm_enabled", "Show Watermark", true, "wm")
+T(WmB, "wm_fps", "Show FPS", true, "wmFps")
+WmB:AddInput("wm_text", {
+    Text = "Custom Text", Default = "NE ~ Nemesis Enhancements", Placeholder = "type anything",
+    Callback = function(v) cfg.wmText = tostring(v or "NE ~ Nemesis Enhancements") end,
+})
+WmB:AddInput("wm_badge", {
+    Text = "Badge Text", Default = "NE", Placeholder = "NE",
+    Callback = function(v) cfg.wmBadge = tostring(v or "NE") end,
+})
+WmB:AddDropdown("wm_edition", {
+    Text = "Edition", Default = 1,
+    Values = {"In Development", "Basic", "Premium", "Beta", "Free", "Public", "Private", "VIP", "Ultimate", "Lite", "Pro"},
+    Callback = function(v) cfg.wmEdition = tostring(v) end,
+})
+WmB:AddDropdown("wm_colormode", {
+    Text = "Color Mode", Default = 1, Values = {"Rainbow", "Basic", "Custom"},
+    Callback = function(v) cfg.wmColorMode = tostring(v) end,
+})
+S(WmB, "wm_r", "Custom R", 90, 0, 255, 0, "wmColorR")
+S(WmB, "wm_g", "Custom G", 180, 0, 255, 0, "wmColorG")
+S(WmB, "wm_b", "Custom B", 255, 0, 255, 0, "wmColorB")
+
+-- ===== BYPASSES =====
+local By = Tabs.Bypasses:AddLeftGroupbox("Weapon Bypasses")
+T(By, "bypass_sling", "Slingshot Bypass", false, "slingBypass")
+T(By, "bypass_bow", "Bow Bypass", false, "bowBypass")
+T(By, "bypass_dagger", "Dagger Bypass", false, "daggerBypass")
+By:AddLabel("auto-hit assist — equip weapon then enable")
+
+-- ===== MISC =====
+local Misc = Tabs.Misc:AddLeftGroupbox("Misc")
+T(Misc, "misc_antiafk", "Anti AFK", true, "antiafk")
+T(Misc, "misc_ac", "AC Bypass (light)", false, "acBypass")
+Misc:AddButton("Unfreeze Me", function()
+    local c = LP.Character
+    if not c then return end
+    local hrp = c:FindFirstChild("HumanoidRootPart")
+    local hum = c:FindFirstChildOfClass("Humanoid")
+    cfg.fly = false
+    cfg.orbit = false
+    if hrp then
+        hrp.Anchored = false
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end
+    if hum then
+        hum.PlatformStand = false
+        hum.WalkSpeed = 16
+        pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
+    end
+    for _, p in ipairs(c:GetDescendants()) do
+        if p:IsA("BasePart") then p.Anchored = false end
+    end
+    Library:Notify("Unfrozen", 2)
+end)
+
+ThemeManager:SetLibrary(Library)
+SaveManager:SetLibrary(Library)
+ThemeManager:SetFolder("NemesisEnhancements")
+SaveManager:SetFolder("NemesisEnhancements")
+SaveManager:BuildConfigSection(Tabs.Settings)
+ThemeManager:ApplyToTab(Tabs.Settings)
+
+Tabs.Settings:AddRightGroupbox("System"):AddButton("Unload", function()
+    for _, c in ipairs(getgenv().NE_Conns or {}) do pcall(function() c:Disconnect() end) end
+    getgenv().NE_Conns = {}
+    pcall(function() if crossGui then crossGui:Destroy() end end)
+    pcall(function() if wmGui then wmGui:Destroy() end end)
+    for _, h in pairs(espHL or {}) do pcall(function() h:Destroy() end) end
+    Library:Unload()
+end)
+
+Library:Notify("NE ~ Nemesis Enhancements loaded", 3)
+
+-- ========== HELPERS ==========
+local function getHRP()
+    local c = LP.Character
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+local function getHum()
+    local c = LP.Character
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+local function getHead(char)
+    if not char then return nil end
+    return char:FindFirstChild("HitboxHead") or char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+end
+local function isEnemy(p)
+    if not p or p == LP or not p.Character then return false end
+    local h = p.Character:FindFirstChildOfClass("Humanoid")
+    if not h or h.Health <= 0 then return false end
+    if LP.Team and p.Team and LP.Team == p.Team then return false end
+    return true
+end
+
+local function getClosest(fov, range)
+    Cam = workspace.CurrentCamera
+    if not Cam then return nil, nil end
+    local best, bestD = nil, 1e9
+    local origin = Cam.CFrame.Position
+    local cx, cy = Cam.ViewportSize.X * 0.5, Cam.ViewportSize.Y * 0.5
+    for _, p in ipairs(Players:GetPlayers()) do
+        if isEnemy(p) then
+            local part = getHead(p.Character)
+            if part then
+                local dist = (part.Position - origin).Magnitude
+                if dist <= range then
+                    local sp, onS = Cam:WorldToViewportPoint(part.Position)
+                    if onS then
+                        local d = (Vector2.new(sp.X, sp.Y) - Vector2.new(cx, cy)).Magnitude
+                        if d <= fov and d < bestD then
+                            bestD = d
+                            best = { plr = p, part = part, char = p.Character }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if not best then return nil, nil end
+    local pos = best.part.Position
+    if cfg.silentPred or cfg.ragePred then
+        local ehrp = best.char:FindFirstChild("HumanoidRootPart")
+        local vel = ehrp and ehrp.AssemblyLinearVelocity or Vector3.zero
+        local dist = (Cam.CFrame.Position - pos).Magnitude
+        pos = pos + vel * math.clamp(dist / math.max(cfg.lead, 80), 0.04, 0.45)
+    end
+    return best, pos
+end
+
+local useItem = nil
+task.defer(function()
+    pcall(function()
+        for _, d in ipairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
+            if d.Name == "UseItem" and d:IsA("RemoteEvent") then
+                useItem = d
+                break
+            end
+        end
+    end)
+end)
+
+-- ========== CROSSHAIR (old script style ScreenGui) ==========
+local crossGui = Instance.new("ScreenGui")
+crossGui.Name = "NemesisCrosshair"
+crossGui.ResetOnSpawn = false
+crossGui.IgnoreGuiInset = true
+crossGui.DisplayOrder = 999999
+crossGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+pcall(function() crossGui.Parent = CoreGui end)
+if not crossGui.Parent then
+    crossGui.Parent = LP:WaitForChild("PlayerGui")
+end
+
+local function makeLine(name, z)
+    local f = Instance.new("Frame")
+    f.Name = name
+    f.AnchorPoint = Vector2.new(0.5, 0.5)
+    f.BorderSizePixel = 0
+    f.BackgroundColor3 = Color3.new(1, 1, 1)
+    f.ZIndex = z or 2
+    f.Parent = crossGui
+    return f
+end
+
+local outTop, outBottom, outLeft, outRight = makeLine("OT", 1), makeLine("OB", 1), makeLine("OL", 1), makeLine("OR", 1)
+local lineTop, lineBottom, lineLeft, lineRight = makeLine("T", 2), makeLine("B", 2), makeLine("L", 2), makeLine("R", 2)
+local allLines = { outTop, outBottom, outLeft, outRight, lineTop, lineBottom, lineLeft, lineRight }
+
+local crossText = Instance.new("TextLabel")
+crossText.Name = "CrosshairText"
+crossText.AnchorPoint = Vector2.new(0.5, 0)
+crossText.BackgroundTransparency = 1
+crossText.Size = UDim2.fromOffset(400, 28)
+crossText.Font = Enum.Font.GothamBold
+crossText.Text = "NE"
+crossText.TextSize = 18
+crossText.TextColor3 = Color3.fromRGB(0, 255, 80)
+crossText.TextStrokeTransparency = 0
+crossText.TextStrokeColor3 = Color3.new(0, 0, 0)
+crossText.TextXAlignment = Enum.TextXAlignment.Center
+crossText.ZIndex = 10
+crossText.Parent = crossGui
+
+local crossAngle = 0
+
+-- ========== WATERMARK ==========
+local wmGui = Instance.new("ScreenGui")
+wmGui.Name = "NE_WM"
+wmGui.ResetOnSpawn = false
+wmGui.DisplayOrder = 100
+wmGui.IgnoreGuiInset = true
+pcall(function() wmGui.Parent = CoreGui end)
+if not wmGui.Parent then wmGui.Parent = LP:WaitForChild("PlayerGui") end
+
+local wmBar = Instance.new("Frame")
+wmBar.Name = "Bar"
+wmBar.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+wmBar.BackgroundTransparency = 0.2
+wmBar.BorderSizePixel = 0
+wmBar.Position = UDim2.fromOffset(12, 12)
+wmBar.Size = UDim2.fromOffset(340, 28)
+wmBar.Parent = wmGui
+Instance.new("UICorner", wmBar).CornerRadius = UDim.new(0, 6)
+
+local wmNe = Instance.new("TextLabel")
+wmNe.Size = UDim2.new(0, 36, 1, 0)
+wmNe.Position = UDim2.fromOffset(6, 0)
+wmNe.BackgroundTransparency = 1
+wmNe.Font = Enum.Font.GothamBold
+wmNe.TextSize = 14
+wmNe.Text = "NE"
+wmNe.TextColor3 = Color3.fromRGB(90, 180, 255)
+wmNe.Parent = wmBar
+
+local wmText = Instance.new("TextLabel")
+wmText.Size = UDim2.new(1, -48, 1, 0)
+wmText.Position = UDim2.fromOffset(42, 0)
+wmText.BackgroundTransparency = 1
+wmText.Font = Enum.Font.GothamMedium
+wmText.TextSize = 13
+wmText.TextXAlignment = Enum.TextXAlignment.Left
+wmText.TextColor3 = Color3.fromRGB(230, 230, 240)
+wmText.Text = "NE ~ Nemesis Enhancements"
+wmText.Parent = wmBar
+
+local fpsFrames, fpsLast, fpsVal = 0, tick(), 0
+
+-- ========== FLY (exact old script method) ==========
+local flyConn = nil
+local function startFly()
+    if flyConn then flyConn:Disconnect() end
+    flyConn = RunService.Heartbeat:Connect(function(dt)
+        if not cfg.fly then return end
+        local tHrp = getHRP()
+        if not tHrp then return end
+        local h = getHum()
+        if h then h:ChangeState(Enum.HumanoidStateType.Physics) end
+        local c = workspace.CurrentCamera
+        if not c then return end
+        local md = Vector3.zero
+        if h and h.MoveDirection.Magnitude > 0 then
+            local fl = Vector3.new(c.CFrame.LookVector.X, 0, c.CFrame.LookVector.Z)
+            if fl.Magnitude > 0.001 then
+                md = Vector3.new(h.MoveDirection.X, c.CFrame.LookVector.Y * h.MoveDirection:Dot(fl.Unit), h.MoveDirection.Z)
+            else
+                md = Vector3.new(h.MoveDirection.X, c.CFrame.LookVector.Y, h.MoveDirection.Z)
+            end
+        end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then md = md + Vector3.new(0, 1, 0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then md = md - Vector3.new(0, 1, 0) end
+        tHrp.AssemblyLinearVelocity = Vector3.zero
+        tHrp.AssemblyAngularVelocity = Vector3.zero
+        if md.Magnitude > 0 then
+            tHrp.CFrame = tHrp.CFrame + (md.Unit * (cfg.flySpeed * dt))
+        end
+    end)
+    bind(flyConn)
+end
+startFly()
+
+-- ========== MAIN HEARTBEAT ==========
+local rageLast, trigLast, tickN = 0, 0, 0
+espHL = {}
+
+bind(RunService.Heartbeat:Connect(function(dt)
+    tickN += 1
+    Cam = workspace.CurrentCamera
+    local hrp = getHRP()
+    local hum = getHum()
+    local char = LP.Character
+
+    -- walkspeed / jump
+    if hum and cfg.walkspeed then hum.WalkSpeed = cfg.walkspeedValue end
+    if hum and cfg.jumppower then hum.JumpPower = cfg.jumppowerValue end
+
+    -- velocity (when not flying)
+    if hrp and hum and cfg.velocity and not cfg.fly then
+        local spd = cfg.velocitySpeed
+        local md = hum.MoveDirection
+        if md.Magnitude > 0 then
+            hrp.AssemblyLinearVelocity = Vector3.new(md.X * spd, hrp.AssemblyLinearVelocity.Y, md.Z * spd)
+        end
+    end
+
+    -- glide
+    if hrp and hum and cfg.glide and hum.FloorMaterial == Enum.Material.Air then
+        local md = hum.MoveDirection
+        local spd = cfg.glideSpeed
+        if md.Magnitude > 0 then
+            hrp.AssemblyLinearVelocity = Vector3.new(md.X * spd, math.max(hrp.AssemblyLinearVelocity.Y, -8), md.Z * spd)
+        end
+    end
+
+    -- bhop
+    if hum and cfg.bhop and hum.FloorMaterial ~= Enum.Material.Air and UIS:IsKeyDown(Enum.KeyCode.Space) then
+        hum.Jump = true
+    end
+
+    -- noclip
+    if char and cfg.noclip and tickN % 2 == 0 then
+        for _, p in ipairs(char:GetChildren()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
+
+    -- godmode
+    if hum and cfg.godmode and hum.Health < hum.MaxHealth then
+        hum.Health = hum.MaxHealth
+    end
+
+    -- spinbot
+    if hrp and cfg.spinbot then
+        hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(cfg.spinbotSpeed * 0.15), 0)
+    end
+
+    -- anti aim
+    if hrp and cfg.antiAim then
+        hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(math.rad(cfg.aaPitch), math.rad(cfg.aaYaw), 0)
+    end
+
+    -- orbit
+    if hrp and cfg.orbit and Cam then
+        local a = tick() * (cfg.orbitSpeed / 60)
+        local t, _ = getClosest(9999, 300)
+        local center = (t and t.part and t.part.Position) or hrp.Position
+        local r = cfg.orbitRadius
+        hrp.CFrame = CFrame.new(center + Vector3.new(math.cos(a)*r, cfg.orbitHeight, math.sin(a)*r), center)
+    end
+
+    -- third person
+    if hrp and cfg.thirdPerson and Cam then
+        Cam.CFrame = CFrame.new(hrp.Position - Cam.CFrame.LookVector * cfg.thirdDist + Vector3.new(0,2,0), hrp.Position)
+    end
+
+    -- hitbox expander
+    if cfg.hitboxExp and tickN % 15 == 0 then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if isEnemy(p) then
+                local h = getHead(p.Character)
+                if h then
+                    h.Size = Vector3.new(cfg.hitboxSize, cfg.hitboxSize, cfg.hitboxSize)
+                    h.Transparency = 0.6
+                    h.CanCollide = false
+                end
+            end
+        end
+    end
+
+    if cfg.fullbright then
+        pcall(function()
+            game.Lighting.Brightness = 2
+            game.Lighting.ClockTime = 14
+            game.Lighting.FogEnd = 1e6
+        end)
+    end
+    if cfg.noFog then
+        pcall(function() game.Lighting.FogEnd = 1e6 end)
+    end
+
+    -- gun mods
+    if tickN % 6 == 0 and (cfg.norecoil or cfg.nospread or cfg.rapidfire) and char then
+        local tool = char:FindFirstChildOfClass("Tool") or char:FindFirstChild("EquippedItem")
+        if tool then
+            pcall(function()
+                for _, n in ipairs({"Recoil", "Spread", "FireRate", "Cooldown", "Kick"}) do
+                    local v = tool:FindFirstChild(n, true)
+                    if v and v:IsA("NumberValue") then
+                        if (n == "FireRate" or n == "Cooldown") and cfg.rapidfire then
+                            v.Value = 0.02
+                        elseif cfg.norecoil or cfg.nospread then
+                            v.Value = 0
+                        end
+                    end
+                end
+            end)
+        end
+    end
+
+    -- combat
+    local need = cfg.aimbot or cfg.silent or cfg.ragebot or cfg.bowCombat or cfg.trigger or cfg.projectileMimic or cfg.slingBypass or cfg.bowBypass or cfg.daggerBypass
+    if need and Cam then
+        local fov = 200
+        if cfg.aimbot then fov = cfg.aimbotFov end
+        if cfg.silent then fov = math.max(fov, cfg.silentFov) end
+        if cfg.ragebot then
+            fov = cfg.rageFov >= 350 and 9999 or cfg.rageFov
+        end
+        if cfg.bowCombat then fov = math.max(fov, cfg.bowFov) end
+        if cfg.trigger then fov = math.min(fov, cfg.triggerFov) end
+        local range = cfg.ragebot and cfg.rageRange or (cfg.bowCombat and cfg.bowRange or 800)
+        local t, pos = getClosest(fov, range)
+
+        if t and pos then
+            if cfg.aimbot or cfg.silent or cfg.bowCombat or cfg.ragebot then
+                local smooth = cfg.aimbot and cfg.aimbotSmooth or 0.05
+                Cam.CFrame = Cam.CFrame:Lerp(CFrame.lookAt(Cam.CFrame.Position, pos), math.clamp(1 - smooth, 0.1, 1))
+            end
+
+            if cfg.trigger then
+                local now = tick()
+                if now - trigLast >= cfg.triggerDelay then
+                    trigLast = now
+                    pcall(function() mouse1click() end)
+                end
+            end
+
+            if cfg.ragebot and cfg.rageAuto and hum and hum.Health > 0 then
+                local now = tick()
+                if now - rageLast >= cfg.rageRate then
+                    rageLast = now
+                    local item = char and char:FindFirstChild("EquippedItem")
+                    if useItem and item then
+                        pcall(function()
+                            useItem:FireServer({
+                                id = HttpService:GenerateGUID(false),
+                                objectId = HttpService:GenerateGUID(false),
+                                item = item.Name,
+                                position = pos,
+                                attackNum = math.random(1, 9999),
+                                rotation = t.part.CFrame.Rotation,
+                                one = Vector3.one,
+                                packed = { "\0", "\1", "\2", "\3" },
+                            })
+                        end)
+                    end
+                    -- also try tool activate
+                    pcall(function()
+                        local tool = char:FindFirstChildOfClass("Tool")
+                        if tool and tool.Activate then tool:Activate() end
+                    end)
+                end
+            end
+
+            -- projectile mimic
+            if cfg.projectileMimic and tickN % 2 == 0 then
+                pcall(function()
+                    for _, o in ipairs(workspace:GetChildren()) do
+                        if o:IsA("BasePart") then
+                            local n = string.lower(o.Name)
+                            if n == "coreprojectile" or n:find("arrow") or n:find("projectile") or n:find("bullet") then
+                                local dir = pos - o.Position
+                                if dir.Magnitude > 1 then
+                                    local spd = math.max(o.AssemblyLinearVelocity.Magnitude, 180)
+                                    o.AssemblyLinearVelocity = dir.Unit * spd
+                                    o.CFrame = CFrame.lookAt(o.Position, pos)
+                                end
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    end
+end))
+
+-- crosshair + watermark render
+bind(RunService.RenderStepped:Connect(function(dt)
+    -- FPS
+    fpsFrames += 1
+    if tick() - fpsLast >= 1 then
+        fpsVal = fpsFrames
+        fpsFrames = 0
+        fpsLast = tick()
+    end
+
+    -- watermark
+    wmGui.Enabled = cfg.wm
+    if cfg.wm then
+        local parts = {
+            tostring(cfg.wmText or "NE ~ Nemesis Enhancements"),
+            tostring(cfg.wmEdition or "In Development"),
+        }
+        if cfg.wmFps then table.insert(parts, tostring(fpsVal) .. " FPS") end
+        wmText.Text = table.concat(parts, "  |  ")
+        local w = math.clamp(#wmText.Text * 7 + 70, 220, 800)
+        wmBar.Size = UDim2.fromOffset(w, 28)
+
+        local badge = tostring(cfg.wmBadge or "NE")
+        if badge == "" then badge = "NE" end
+        wmNe.Text = badge
+        local blen = math.clamp(#badge * 9 + 10, 36, 120)
+        wmNe.Size = UDim2.new(0, blen, 1, 0)
+        wmText.Position = UDim2.fromOffset(blen + 8, 0)
+        wmText.Size = UDim2.new(1, -(blen + 14), 1, 0)
+
+        local mode = cfg.wmColorMode or "Rainbow"
+        if mode == "Rainbow" then
+            wmNe.TextColor3 = Color3.fromHSV((tick() * 0.4) % 1, 1, 1)
+        elseif mode == "Custom" then
+            wmNe.TextColor3 = Color3.fromRGB(cfg.wmColorR or 90, cfg.wmColorG or 180, cfg.wmColorB or 255)
+        else -- Basic
+            wmNe.TextColor3 = Color3.fromRGB(90, 180, 255)
+        end
+    end
+
+    -- crosshair
+    local show = cfg.crosshair
+    for _, f in ipairs(allLines) do f.Visible = show end
+    crossText.Visible = show and cfg.crossTextOn
+    if not show then return end
+
+    local col
+    if cfg.crossRainbow then
+        col = Color3.fromHSV((tick() * 0.45) % 1, 1, 1)
+    else
+        col = Color3.fromRGB(cfg.crossR or 0, cfg.crossG or 255, cfg.crossB or 80)
+    end
+    local gap = cfg.crossGap
+    local len = cfg.crossSize
+    local thick = cfg.crossThick or 2
+    local outT = cfg.crossOutThick or 4
+    if not cfg.crossOutline then outT = 0 end
+
+    -- pulse: size/gap grows and shrinks (up down up down)
+    if cfg.crossPulse then
+        local pulse = math.sin(tick() * (cfg.crossPulseSpeed or 2) * math.pi) * (cfg.crossPulseAmount or 4)
+        gap = math.max(0, gap + pulse)
+        len = math.max(2, len + pulse * 0.5)
+    end
+
+    if cfg.crossRotate then
+        crossAngle = crossAngle + math.rad((cfg.crossRotateSpeed or 120) * (dt or 0.016))
+    else
+        crossAngle = 0
+    end
+
+    local cx = Cam and Cam.ViewportSize.X * 0.5 or 0
+    local cy = Cam and Cam.ViewportSize.Y * 0.5 or 0
+
+    local function place(frame, ox, oy, w, h, isOut)
+        local ang = crossAngle
+        local rx = ox * math.cos(ang) - oy * math.sin(ang)
+        local ry = ox * math.sin(ang) + oy * math.cos(ang)
+        frame.Size = UDim2.fromOffset(w, h)
+        frame.Position = UDim2.fromOffset(cx + rx, cy + ry)
+        frame.Rotation = math.deg(ang)
+        frame.BackgroundColor3 = isOut and Color3.new(0, 0, 0) or col
+    end
+
+    place(outTop, 0, -(gap + len / 2), outT, len + 2, true)
+    place(outBottom, 0, (gap + len / 2), outT, len + 2, true)
+    place(outLeft, -(gap + len / 2), 0, len + 2, outT, true)
+    place(outRight, (gap + len / 2), 0, len + 2, outT, true)
+    place(lineTop, 0, -(gap + len / 2), thick, len, false)
+    place(lineBottom, 0, (gap + len / 2), thick, len, false)
+    place(lineLeft, -(gap + len / 2), 0, len, thick, false)
+    place(lineRight, (gap + len / 2), 0, len, thick, false)
+
+    crossText.Text = cfg.crossText or "NE"
+    crossText.TextColor3 = col
+    crossText.Position = UDim2.fromOffset(cx, cy + gap + len + 8)
+end))
+
+-- ESP
+bind(task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if not (cfg.esp or cfg.espChams) then
+            for p, h in pairs(espHL) do
+                pcall(function() h:Destroy() end)
+                espHL[p] = nil
+            end
+        else
+            local seen = {}
+            for _, p in ipairs(Players:GetPlayers()) do
+                if isEnemy(p) and p.Character then
+                    seen[p] = true
+                    if not espHL[p] or not espHL[p].Parent then
+                        local h = Instance.new("Highlight")
+                        h.FillTransparency = 0.7
+                        h.FillColor = Color3.fromRGB(0, 255, 120)
+                        h.OutlineColor = Color3.fromRGB(0, 255, 120)
+                        h.Adornee = p.Character
+                        h.Parent = p.Character
+                        espHL[p] = h
+                    else
+                        espHL[p].Adornee = p.Character
+                    end
+                end
+            end
+            for p, h in pairs(espHL) do
+                if not seen[p] then
+                    pcall(function() h:Destroy() end)
+                    espHL[p] = nil
+                end
+            end
+        end
+    end
+end))
+
+bind(UIS.JumpRequest:Connect(function()
+    if cfg.infiniteJump then
+        local hum = getHum()
+        if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end))
+
+bind(LP.Idled:Connect(function()
+    if cfg.antiafk then
+        pcall(function()
+            local vu = game:GetService("VirtualUser")
+            vu:CaptureController()
+            vu:ClickButton2(Vector2.new())
+        end)
+    end
+end))
