@@ -1,16 +1,1 @@
--- Script is currently down for maintenance
-
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
-local message = "This script is down for maintenance\nI'll be back up soon"
-
-pcall(function()
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Script Status",
-        Text = message,
-        Duration = 5
-    })
-end)
-
-LocalPlayer:Kick(message)
+loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/594647a4ef7017e211932370515a25bc.lua"))()
