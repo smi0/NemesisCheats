@@ -1,13 +1,19 @@
 -- Script is currently down for maintenance
 
-local StarterGui = game:GetService("StarterGui")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
+local message = "This script is down for maintenance\nI'll be back up soon"
+
+-- Show notification
 pcall(function()
-    StarterGui:SetCore("SendNotification", {
+    game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Script Status",
-        Text = "This script is down for maintenance.\nI'll be back up soon!",
-        Duration = 8
+        Text = message,
+        Duration = 6
     })
 end)
 
-warn("This script is down for maintenance. I'll be back up soon!")
+-- Kick the player with the message
+task.wait(1.5)
+LocalPlayer:Kick(message)
