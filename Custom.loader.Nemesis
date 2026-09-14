@@ -1,17 +1,13 @@
-if (getgenv().UC_LOADED) then
-	return;
-end;
-getgenv().UC_LOADED = true;
+-- Script is currently down for maintenance
 
-if (identifyexecutor() == "Wave") then
-	getgenv().gethui = function()
-		return game:GetService("CoreGui");
-	end;	
-end;
+local StarterGui = game:GetService("StarterGui")
 
-if (game.GameId == 6035872082) thenloadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/594647a4ef7017e211932370515a25bc.lua"))()
-elseif (game.GameId == 1008451066) then
-	loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/594647a4ef7017e211932370515a25bc.lua"))()
-elseif (game.PlaceId == 2317712696) then
-	loadstring(game:HttpGet("https://api.luarmor.net/files/v4/loaders/594647a4ef7017e211932370515a25bc.lua"))()
-end;
+pcall(function()
+    StarterGui:SetCore("SendNotification", {
+        Title = "Script Status",
+        Text = "This script is down for maintenance.\nI'll be back up soon!",
+        Duration = 8
+    })
+end)
+
+warn("This script is down for maintenance. I'll be back up soon!")
