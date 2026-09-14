@@ -5,15 +5,12 @@ local LocalPlayer = Players.LocalPlayer
 
 local message = "This script is down for maintenance\nI'll be back up soon"
 
--- Show notification
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Script Status",
         Text = message,
-        Duration = 6
+        Duration = 5
     })
 end)
 
--- Kick the player with the message
-task.wait(1.5)
 LocalPlayer:Kick(message)
